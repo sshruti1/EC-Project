@@ -1,0 +1,292 @@
+#include <Adafruit_SSD1306.h>
+#include <splash.h>
+
+#include <Adafruit_GFX.h>
+#include <Adafruit_SPITFT.h>
+#include <Adafruit_SPITFT_Macros.h>
+#include <gfxfont.h>
+
+#include <CapacitiveSensor.h>
+#include <SPI.h>
+#include <Wire.h>
+
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+#define OLED_RESET     4 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+#define COMMON_PIN      2    // The common 'send' pin for all keys
+#define NUM_OF_SAMPLES  10   // Higher number whens more delay but more consistent readings
+#define CAP_THRESHOLD   500  // Capactive reading that triggers a note (adjust to fit your needs)
+
+// This macro creates a capacitance "key" sensor object for each key on the piano keyboard:
+#define CS(Y) CapacitiveSensor(2, Y)
+
+// Defines the pins that the keys are connected to:
+CapacitiveSensor keys[] = {CS(3), CS(4), CS(5), CS(6)};
+
+char button = 0;
+char REC = 0;
+
+int on = 0;
+
+int recorded_button[200];
+int pev_button;
+
+int recorded_time [200];
+char time_index;
+
+int* notes;
+
+char button_index = 0;
+
+unsigned long start_time;
+int note_time;
+
+int sp = 10;      //Speaker Pin
+int tp = 7;       //Trigger Pin
+int ep = 8;       // Echo Pin
+
+int c = 523;
+int d = 587;
+int e = 659;
+int f = 698;     //These are the frequency      
+int g = 784;     //values of the different notes
+int a = 880;   
+int b = 988;
+int c2 = 1047;
+
+int c1 = 262;
+int d1 = 294;
+int e1 = 330;
+int f1 = 349;     //These are the frequency      
+int g1 = 392;     //values of the different notes
+int a1 = 440;   
+int b1 = 494;
+
+int recm =1;
+int scm = 1;
+
+void piano(int val){
+  display.clearDisplay();
+  display.setTextSize(2);             // Normal 1:1 pixel scale
+  display.setTextColor(WHITE);        // Draw white text
+  display.setCursor(0,0);             // Start at top-left corner
+  display.print(F("Volume: ")); display.println(val);
+  display.println("Piano Mode ON");
+  display.display();
+  delay(30);
+   
+}
+
+void setup() { 
+  // Turn off autocalibrate on all channels:
+  for(int i=0; i<2; ++i) {
+    keys[i].set_CS_AutocaL_Millis(0xFFFFFFFF);
+  }
+  // Set the buzzer as an output:
+  pinMode(10,OUTPUT);
+  pinMode(7,OUTPUT);
+  pinMode(8,INPUT);
+  Serial.begin(9600);
+  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3c)) { // Address 0x3D for 128x64
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;); // Don't proceed, loop forever
+  }
+  
+  display.clearDisplay();
+  display.display();
+  delay(1000);
+  // display.display() is NOT necessary after every single drawing command,
+  // unless that's what you want...rather, you can batch up a bunch of
+  // drawing operations and then update the screen all at once by calling
+  // display.display(). These examples demonstrate both approaches...
+}
+
+void Detect_button(){
+  int notes1[] = {c,d,e,f,g,a,b,c2}; //An array storing all the notes. It's kind of like a dictionary.
+  int notes2[] = {c1,d1,e1,f1,g1,a1,b1,c};
+  long duration, distance; //Variables to store the values of time and length
+  
+  digitalWrite(tp,LOW);
+  delayMicroseconds(2);         
+  digitalWrite(tp,HIGH);      //This area sends out a pulse from the trigger
+  delayMicroseconds(5);
+  digitalWrite(tp,LOW);                 
+  duration = pulseIn(ep, HIGH); //The echo is recieved, and saved as the duration
+  
+  distance = (duration/2)/29.1; // We convert the time into distance in centimeters, using the speed of sound and other factors.
+  pev_button = button; //remember the previous button pressed by the user
+
+     if(distance>3 && distance<37){
+      if(scm%2 == 0){
+        notes = notes1;
+      }
+      if(scm%2 ==1){
+        notes = notes2;
+      }
+      if(distance>4&&distance<6){      //For a distance between 4 and 7, it plays C for 100 milliseconds
+        tone(sp,notes[0],100);
+        button = 8;}
+      else 
+        if(distance>8&&distance<10){
+        tone(sp,notes[1],100); 
+        button = 7;}     //For a distance between 8 and 11, it plays D for 100 milliseconds
+      else
+        if(distance>12&&distance<14){
+        tone(sp,notes[2],100);
+        button = 6;     
+        }//For a distance between 12 and 15, it plays E for 100 milliseconds
+      else
+        if(distance>16&&distance<18){
+        tone(sp,notes[3],100); 
+        button = 5;  
+        }//For a distance between 16 and 19, it plays F for 100 milliseconds
+      else
+        if(distance>20&&distance<22){
+        tone(sp,notes[4],100);  
+        button = 4;   
+        }//For a distance between 20 and 23, it plays G for 100 milliseconds
+      else
+        if(distance>24&&distance<26){
+        tone(sp,notes[5],100);  
+        button = 3;   
+         }//For a distance between 24 and 27, it plays A for 100 milliseconds
+      else
+        if(distance>28&&distance<30){
+        tone(sp,notes[6],100);  
+        button = 2;   
+        }//For a distance between 28 and 31, it plays B for 100 milliseconds
+      else
+        if(distance>32&&distance<34){
+        tone(sp,notes[7],100);  
+        button = 1;   
+        }//For a distance between 32 and 35, it plays high C for 100 milliseconds
+        }
+    else button = 0;
+   
+/****Record the pressed buttons in a array***/
+  if (button != pev_button && pev_button != 0)
+  {
+    recorded_button[button_index] = pev_button;
+    button_index++;
+    recorded_button[button_index] = 0;
+    button_index++;
+  }
+/**End of Recording program**/
+} 
+
+void Play_tone()
+{
+
+ /****Rcord the time delay between each button press in a array***/
+
+  if (button != pev_button)
+  {
+   // lcd.clear(); //Then clean it
+    note_time = (millis() - start_time) / 10;
+    recorded_time[time_index] = note_time;
+    time_index++;
+    start_time = millis();
+  }
+  /**End of Recording program**/
+
+}
+
+void Intro(void) {
+  display.clearDisplay();
+
+  display.setTextSize(1); // Draw 2X-scale text
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+  display.println(F("Shivank Garg 160658"));
+  display.println(F("Shruti Shukla 160667"));
+  display.println(F(""));
+  display.println(F("EE381A EC Lab"));
+  display.println(F("The Music Launchpad"));
+  display.println(F(""));
+  display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+  display.println(F("PRESS ON to play"));
+  
+  display.display();      // Show initial text
+  delay(100);
+  for(;;){
+  // Scroll in various directions, pausing in-between:
+    display.startscrollright(0x00, 0x0F);
+    display.invertDisplay(true);
+    delay(1000);
+    display.invertDisplay(false);
+    delay(1000);
+  }
+  if(on==1){
+    return;
+  }
+}
+
+
+
+
+
+void loop(){// Loop through each key:
+  display.clearDisplay();
+  int val = analogRead(0);
+  val = map(val, 0, 1020, 0, 15); 
+  if(keys[0].capacitiveSensor(NUM_OF_SAMPLES) > CAP_THRESHOLD){
+      on++;
+      delay(100);
+    }
+
+    Serial.print("ON : ") ; Serial.println(on%2);
+  if(on%2==0){
+      Intro();
+      return;
+    }
+  
+   if(on%2 == 1){
+
+ 
+
+  for (int i = 0; i<4; ++i){
+    // If the capacitance reading is greater than the threshold, play a note: 
+    if(keys[1].capacitiveSensor(NUM_OF_SAMPLES) > CAP_THRESHOLD) {
+      scm++;
+      delay(100);
+    }
+    if(keys[2].capacitiveSensor(NUM_OF_SAMPLES) > CAP_THRESHOLD) {
+     recm = 1;
+     delay(100);
+    }
+    if(keys[3].capacitiveSensor(NUM_OF_SAMPLES) > CAP_THRESHOLD) {
+     recm = 2;
+     delay(100);
+    }
+    Serial.print("RECM : ") ; Serial.println(recm%2);
+    Serial.print("SCM : ") ; Serial.println(scm); 
+    
+    if(recm == 1){  
+      //lcd.setCursor(0, 0); lcd.print("Recording..");
+      //lcd.setCursor(0, 1);
+      Detect_button();
+      Play_tone();
+      piano(val);
+    }
+    if(recm==2){ //If the toggle switch is set in Playing mode
+    //lcd.clear();
+    //lcd.setCursor(0, 0);  lcd.print("Now Playing..");
+      for (int i = 0; i < sizeof(recorded_button) / 2; i++){
+        delay((recorded_time[i]) * 10); //Wait for before paying next tune
+        if (recorded_button[i] == 0)
+          noTone(sp); //user dint touch any button
+        else
+          tone(sp, notes[(recorded_button[i] - 1)]); //play the sound corresponding to the button touched by the user
+        }
+    }
+    
+}
+}
+}
+
+  
